@@ -66,10 +66,14 @@ async function notify(url: URL) {
 
 async function start() {
   const day = today();
-  const due = (await sectionTasks()).filter((t) => isDue(t, day));
+  const all = await sectionTasks();
+  const due = all.filter((t) => isDue(t, day));
   const tasks = due.map((t) =>
     `id=${t.id} | ${t.content} | ${t.description.split("\n").filter((l) => !l.startsWith("[Send on WhatsApp]")).join(" ")}`
   ).join("\n") || "(nothing due)";
+  // Not due yet, but the caller may mention one ("move Kasun to Friday").
+  const upcoming = all.filter((t) => !isDue(t, day)).map((t) => `id=${t.id} | ${t.content} | due ${t.due!.date.slice(0, 10)}`)
+    .join("\n") || "(none)";
   return json({
     publicKey: env("VAPI_PUBLIC_KEY"),
     assistantId: env("VAPI_ASSISTANT_ID"),
@@ -78,6 +82,7 @@ async function start() {
       today: `${new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "long" }).format(new Date())} ${day}`,
       greeting: due.length ? `${due.length} to chase. Ready?` : "Nothing due today. Anything new you are waiting on?",
       tasks,
+      upcoming,
     },
   });
 }
@@ -95,17 +100,13 @@ async function run(op: Op) {
   });
 }
 
-async function done(req: Request) {
-  const { message } = await req.json();
-  if (message?.type !== "end-of-call-report") return json({ ignored: true });
-  const outputs = Object.values(message.artifact?.structuredOutputs ?? {}) as { result?: { items?: Item[] } }[];
-  // Extraction failed outright (no items list at all): leave a visible marker, never lose a call silently.
-  if (!outputs.some((o) => Array.isArray(o.result?.items))) {
-    console.error("no structured output", JSON.stringify(message.artifact?.structuredOutputs));
-    await run({ op: "create", content: "Check-in was not saved: say it again", due_date: today(), description: "" });
-    return json({ applied: 0, failed: true });
-  }
-  const items = outputs.flatMap((o) => o.result?.items ?? []);
+// The items said on the call, or null when Vapi reported no result at all.
+function itemsOf(structuredOutputs: unknown): Item[] | null {
+  const outputs = Object.values(structuredOutputs ?? {}) as { result?: { items?: Item[] } }[];
+  return outputs.some((o) => Array.isArray(o.result?.items)) ? outputs.flatMap((o) => o.result?.items ?? []) : null;
+}
+
+async function save(items: Item[]) {
   const all = await sectionTasks();
   // The extractor may not echo ids; fall back to matching the person's name in the task title.
   for (const it of items) {
@@ -117,7 +118,44 @@ async function done(req: Request) {
   const { ops, skipped } = apply(items, tasks, today());
   for (const op of ops) await run(op);
   if (skipped.length) console.warn("skipped", JSON.stringify(skipped));
-  return json({ applied: ops.length, skipped: skipped.length });
+  return { applied: ops.length, skipped: skipped.length };
+}
+
+// Vapi sometimes ends a call with an empty result ({}) although a re-run of the extraction succeeds.
+// Re-run it once and wait up to a minute; if that fails too, leave a visible marker. Never lose a call silently.
+async function retry(callId?: string, outputId?: string) {
+  try {
+    const headers = { Authorization: `Bearer ${env("VAPI_PRIVATE_KEY")}`, "Content-Type": "application/json" };
+    const get = async (path: string) => (await fetch(VAPI + path, { headers })).json();
+    outputId ??= (await get(`/assistant/${env("VAPI_ASSISTANT_ID")}`)).artifactPlan?.structuredOutputIds?.[0];
+    if (callId && outputId) {
+      await fetch(`${VAPI}/structured-output/run`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ structuredOutputId: outputId, callIds: [callId] }),
+      });
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => setTimeout(r, 15_000));
+        const items = itemsOf((await get(`/call/${callId}`)).artifact?.structuredOutputs);
+        if (items) return void console.log("retry saved", JSON.stringify(await save(items)));
+      }
+    }
+  } catch (e) {
+    console.error("retry", e);
+  }
+  await run({ op: "create", content: "Check-in was not saved: say it again", due_date: today(), description: "" });
+}
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
+
+async function done(req: Request) {
+  const { message } = await req.json();
+  if (message?.type !== "end-of-call-report") return json({ ignored: true });
+  const items = itemsOf(message.artifact?.structuredOutputs);
+  if (items) return json(await save(items));
+  console.error("empty structured output, retrying", message.call?.id);
+  EdgeRuntime.waitUntil(retry(message.call?.id, Object.keys(message.artifact?.structuredOutputs ?? {})[0]));
+  return json({ retrying: true });
 }
 
 Deno.serve(async (req) => {

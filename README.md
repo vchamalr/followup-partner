@@ -30,6 +30,7 @@ deno test supabase/functions/followup/
 
 ## Known limits
 
+- Vapi sometimes ends a call with an empty result. The server re-runs the extraction once (up to a minute); if that also fails, a task "Check-in was not saved: say it again" appears in Follow-ups.
 - Reads at most 200 tasks from the section.
 - It cannot see WhatsApp, so it asks you whether someone replied.
 - A push notification can be swiped away. Upgrade path: WhatsApp Business Calling for a real ring.

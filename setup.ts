@@ -22,6 +22,9 @@ const PROMPT = `You are an accountability partner on a short voice check-in. The
 Today is {{today}}. Follow-ups due:
 {{tasks}}
 
+Already recorded but not due yet. Do not go through these. Use them only if the caller mentions one: then it is an existing item (reschedule or complete it with its id), never a new one:
+{{upcoming}}
+
 For each due item, say the person and the thing in a few words, then ask "Did they reply?"
 - Replied / sorted: mark it complete.
 - Not yet: say you will draft a chase message, and ask when to check again (default: two days).
