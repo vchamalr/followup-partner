@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Follow-up check-in</title>
+<style>
+  body { font: 18px system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #111; color: #eee; }
+  main { text-align: center; padding: 24px; }
+  button { font: inherit; font-size: 22px; padding: 24px 40px; border: 0; border-radius: 999px; background: #25d366; color: #000; }
+  button.end { background: #e5484d; color: #fff; }
+  p { min-height: 1.5em; color: #aaa; }
+</style>
+<main>
+  <button id="b">Start check-in</button>
+  <p id="s" role="status"></p>
+</main>
+<script type="module">
+  import Vapi from "https://esm.sh/@vapi-ai/web";
+  const FN = "https://acnkxzqquggxkntogcut.supabase.co/functions/v1/followup";
+  const key = new URLSearchParams(location.hash.slice(1)).get("k");
+  const b = document.getElementById("b"), s = document.getElementById("s");
+  let vapi, live = false;
+
+  b.onclick = async () => {
+    if (live) return vapi.stop();
+    b.disabled = true; s.textContent = "Connecting…";
+    try {
+      const r = await fetch(`${FN}/start`, { headers: { "x-key": key ?? "" } });
+      if (!r.ok) throw new Error(r.status === 401 ? "This link is not valid. Open it from the notification." : "Server error " + r.status);
+      const c = await r.json();
+      vapi = new Vapi(c.publicKey);
+      vapi.on("call-start", () => { live = true; b.disabled = false; b.textContent = "End"; b.className = "end"; s.textContent = "Listening"; });
+      vapi.on("call-end", () => { live = false; b.className = ""; b.textContent = "Start check-in"; s.textContent = "Done. Drafts will be in Todoist in a minute."; });
+      vapi.on("error", (e) => { b.disabled = false; s.textContent = "Call error: " + (e?.error?.message ?? e?.message ?? "unknown"); });
+      await vapi.start(c.assistantId, { variableValues: c.variableValues });
+    } catch (e) { b.disabled = false; s.textContent = e.message; }
+  };
+</script>
+</html>
