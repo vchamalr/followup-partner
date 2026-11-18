@@ -10,7 +10,7 @@ export type Item = {
   project?: string; // one of LABELS, if the caller named a project
 };
 
-// Todoist labels a new chase may carry. Also the enum in setup.ts: keep the two in step.
+// Todoist labels a new chase may carry. setup.ts lists these in the extraction prompt.
 export const LABELS = [
   "suwa", "ceylon-wedding", "whatscal", "moments", "impact",
   "montar", "ever-after", "open-check", "pet-charity", "followup-partner",

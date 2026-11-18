@@ -55,7 +55,12 @@ const output = await vapi("/structured-output", {
             what: { type: "string" },
             date: { type: "string", description: "Next chase date, YYYY-MM-DD" },
             draft: { type: "string" },
-            project: { type: "string", enum: LABELS, description: "Only for create, and only if the caller named the project it is for" },
+            // No enum here: one out-of-list value made Vapi return an empty result and the whole call was lost. apply.ts checks it.
+            project: {
+              type: "string",
+              description: `Only for create, and only if the caller named a project. Exactly one of: ${LABELS.join(", ")}. ` +
+                "Pick the closest match to what was heard (speech recognition garbles names, e.g. 'salon wedding' means ceylon-wedding). Omit if none fits.",
+            },
           },
           required: ["action"],
         },
@@ -69,7 +74,12 @@ const assistant = await vapi("/assistant", {
   name: "Follow-up Partner",
   model: { provider: "anthropic", model: "claude-haiku-5-5", messages: [{ role: "system", content: PROMPT }] },
   voice: { provider: "vapi", voiceId: "Elliot" },
-  transcriber: { provider: "deepgram", model: "nova-3", language: "en-IN" },
+  transcriber: {
+    provider: "deepgram",
+    model: "nova-3",
+    language: "en-IN",
+    keyterm: ["Ceylon Wedding", "SUWA", "WhatsCal", "Montar", "Ever After", "Open Check", "Pet Charity", "Kasun", "Nimal", "chase"],
+  },
   firstMessage: "Hi, check-in time. {{greeting}}",
   maxDurationSeconds: 480,
   server: { url: `${fnUrl}/done`, headers: { "X-Vapi-Secret": secret } },

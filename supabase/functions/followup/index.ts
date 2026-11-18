@@ -99,6 +99,12 @@ async function done(req: Request) {
   const { message } = await req.json();
   if (message?.type !== "end-of-call-report") return json({ ignored: true });
   const outputs = Object.values(message.artifact?.structuredOutputs ?? {}) as { result?: { items?: Item[] } }[];
+  // Extraction failed outright (no items list at all): leave a visible marker, never lose a call silently.
+  if (!outputs.some((o) => Array.isArray(o.result?.items))) {
+    console.error("no structured output", JSON.stringify(message.artifact?.structuredOutputs));
+    await run({ op: "create", content: "Check-in was not saved: say it again", due_date: today(), description: "" });
+    return json({ applied: 0, failed: true });
+  }
   const items = outputs.flatMap((o) => o.result?.items ?? []);
   const all = await sectionTasks();
   // The extractor may not echo ids; fall back to matching the person's name in the task title.
