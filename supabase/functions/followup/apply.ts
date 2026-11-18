@@ -7,14 +7,21 @@ export type Item = {
   what?: string;
   date?: string; // YYYY-MM-DD, next chase date
   draft?: string; // WhatsApp message to send
+  project?: string; // one of LABELS, if the caller named a project
 };
+
+// Todoist labels a new chase may carry. Also the enum in setup.ts: keep the two in step.
+export const LABELS = [
+  "suwa", "ceylon-wedding", "whatscal", "moments", "impact",
+  "montar", "ever-after", "open-check", "pet-charity", "followup-partner",
+];
 
 export type Task = { id: string; description: string };
 
 export type Op =
   | { op: "close"; id: string }
   | { op: "update"; id: string; due_date: string; description: string }
-  | { op: "create"; content: string; due_date: string; description: string };
+  | { op: "create"; content: string; due_date: string; description: string; labels?: string[] };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -50,6 +57,7 @@ export function apply(
         content: `Chase ${it.person}: ${it.what}`,
         due_date: due,
         description: lines.join("\n"),
+        ...(it.project && LABELS.includes(it.project) ? { labels: [it.project] } : {}),
       });
     } else if (it.action === "complete" && task) {
       ops.push({ op: "close", id: task.id });

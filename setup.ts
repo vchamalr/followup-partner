@@ -15,6 +15,8 @@ async function vapi(path: string, body: unknown) {
   return r.json();
 }
 
+import { LABELS } from "./supabase/functions/followup/apply.ts";
+
 const PROMPT = `You are an accountability partner on a short voice check-in. The caller struggles to follow up with vendors, customers and people doing tasks for them. Your job: get every due follow-up decided in under three minutes. Be warm, brisk and direct. One question at a time. Never lecture.
 
 Today is {{today}}. Follow-ups due:
@@ -24,7 +26,7 @@ For each due item, say the person and the thing in a few words, then ask "Did th
 - Replied / sorted: mark it complete.
 - Not yet: say you will draft a chase message, and ask when to check again (default: two days).
 - They want to drop it: mark it complete.
-After the list, ask once: "Anything new you are waiting on from someone?" For each new one get: who, what, and when to chase.
+After the list, ask once: "Anything new you are waiting on from someone?" For each new one get: who, what, and when to chase. If they say which project it is for (SUWA, Ceylon Wedding, WhatsCal, Moments, Impact, Montar, Ever After, Open Check, Pet Charity, Follow-up Partner), note it; do not ask.
 Then read back a one-line summary ("2 chased, 1 done, 1 new"), tell them the WhatsApp drafts will be in Todoist in a minute, and say goodbye.
 
 Names are often Sri Lankan (Kasun, Nimal, Dilani). If a name comes through as an ordinary English word, ask them to say the name again once.
@@ -53,6 +55,7 @@ const output = await vapi("/structured-output", {
             what: { type: "string" },
             date: { type: "string", description: "Next chase date, YYYY-MM-DD" },
             draft: { type: "string" },
+            project: { type: "string", enum: LABELS, description: "Only for create, and only if the caller named the project it is for" },
           },
           required: ["action"],
         },

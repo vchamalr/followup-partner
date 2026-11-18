@@ -33,3 +33,9 @@ Deno.test("unknown task id and incomplete create are skipped, not applied", () =
   assert.equal(ops.length, 0);
   assert.equal(skipped.length, 2);
 });
+
+Deno.test("create carries a known project label and drops an unknown one", () => {
+  const mk = (project: string) => apply([{ action: "create", person: "Kasun", what: "venue contract", project }], tasks, today).ops[0];
+  assert.deepEqual((mk("ceylon-wedding") as { labels?: string[] }).labels, ["ceylon-wedding"]);
+  assert.equal("labels" in mk("made-up"), false);
+});

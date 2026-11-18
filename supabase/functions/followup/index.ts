@@ -89,6 +89,7 @@ async function run(op: Op) {
     content: op.content,
     description: op.description,
     due_date: op.due_date,
+    labels: op.labels,
     project_id: env("PROJECT_ID"),
     section_id: env("SECTION_ID"),
   });
